@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	MaxWorkers = 10 
-	MaxQueue   = 100 
-	MaxConn    = 50  
+	MaxWorkers = 10
+	MaxQueue   = 100
+	MaxConn    = 50
 )
 
 type Job struct {
@@ -25,11 +25,11 @@ type Job struct {
 }
 
 var (
-	pendingJobs   int64
-	batchStart    time.Time
-	batchMutex    sync.Mutex
-	metricsLog    *log.Logger
-	jobQueue      chan Job
+	pendingJobs int64
+	batchStart  time.Time
+	batchMutex  sync.Mutex
+	metricsLog  *log.Logger
+	jobQueue    chan Job
 )
 
 func workerProcess(id int) {
@@ -50,7 +50,8 @@ func workerProcess(id int) {
 	}
 }
 
-func work(srv net.Conn) {
+func work(srv net.Conn, connLimiter chan struct{}) {
+	defer func() { <-connLimiter }()
 
 	defer srv.Close()
 	clientAddr := srv.RemoteAddr().String()
@@ -71,7 +72,6 @@ func work(srv net.Conn) {
 			log.Println("read data error:", err)
 			return
 		}
-
 		batchMutex.Lock()
 		if pendingJobs == 0 {
 			batchStart = time.Now()
@@ -114,7 +114,6 @@ func Server() {
 			<-connLimiter
 			continue
 		}
-		go work(srv)
-		<-connLimiter
+		go work(srv, connLimiter)
 	}
 }
